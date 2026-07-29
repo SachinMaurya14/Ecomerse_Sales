@@ -9,7 +9,6 @@ def save_feature_names():
         print(f"{filename} already exists.")
         return
 
-    # Check if best_model.pkl exists and load features from it
     model_path = "best_model.pkl"
     if os.path.exists(model_path):
         try:
@@ -22,10 +21,8 @@ def save_feature_names():
         except Exception as e:
             print(f"Could not read features from model: {e}")
 
-    # Fallback to reconstructing from shopkart_sales_dataset.csv
-    csv_path = "shopkart_sales_dataset.csv"
+    csv_path = os.path.join("data", "shopkart_sales_dataset.csv")
     if not os.path.exists(csv_path):
-        # Fallback to hardcoded list matching the pre-trained model exactly
         features = [
             'Customer_Age', 'Qty', 'Unit Price', 'Discount', 'Shipping', 'Delivery',
             'Sales', 'Profit', 'Rating', 'Profit_Category', 'Month', 'Year', 'Is_Weekend',
@@ -38,10 +35,8 @@ def save_feature_names():
         print(f"Created {filename} from fallback feature list.")
         return
 
-    # Load dataset
     df = pd.read_csv(csv_path)
 
-    # 1. Clean outliers / invalid values
     df = df.dropna(subset=["Order_ID"])
     df = df.drop_duplicates().reset_index(drop=True)
     df["Qty"] = df["Qty"].fillna(df["Qty"].median())
@@ -52,17 +47,14 @@ def save_feature_names():
     df.loc[df["Customer_Age"] > 120, "Customer_Age"] = np.nan
     df["Sales"] = df["Sales"].apply(lambda x: max(x, 0) if pd.notnull(x) else x)
 
-    # Convert date column
     df["Order_Date"] = pd.to_datetime(df["Order_Date"], errors="coerce")
     df["Month"] = df["Order_Date"].dt.month
     df["Year"] = df["Order_Date"].dt.year
     df["Is_Weekend"] = df["Order_Date"].dt.dayofweek.isin([5, 6]).astype(int)
 
-    # Compute Profit Margin and Revenue per Item
     df["Profit_Margin"] = np.where(df["Sales"] > 0, (df["Profit"] / df["Sales"]) * 100, 0)
     df["Revenue_per_Item"] = np.where(df["Qty"] > 0, df["Sales"] / df["Qty"], 0)
 
-    # Categorical string formatting (which converts NaN to 'Nan')
     categorical_cols = ["Gender", "City", "Category", "Profit_Category"]
     for col in categorical_cols:
         if col in df.columns and df[col].dtype == "object":
@@ -71,14 +63,11 @@ def save_feature_names():
     city_mapping = {"Nyc": "New York", "Ny": "New York", "Usa": "United States", "Us": "United States"}
     df["City"] = df["City"].replace(city_mapping)
 
-    # Gender Encoding (standard label encoding mapping: Female=0, Male=1)
     df["Gender_Encoded"] = np.where(df["Gender"] == "Male", 1, 0)
 
-    # Columns to drop
     cols_to_drop = ["Order_ID", "Order_Date", "Profit_Category_Encoded"]
     X = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
 
-    # Convert remaining categorical text into numeric indicators
     X = pd.get_dummies(X, drop_first=True)
 
     feature_names = X.columns.tolist()
